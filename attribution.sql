@@ -1,10 +1,16 @@
 -- ============================================================
 -- Multi-Signal Keyword Revenue Attribution
 -- ============================================================
--- 4-signal join:        page + date + device + country
+-- 3-signal join:        page + date + device
 -- Intent weighting:     branded > transactional > commercial > navigational > informational
 -- Renormalisation:      per page, sum of attributed metrics matches the GA4 page total
 -- Confidence:           HIGH / MEDIUM / LOW based on candidates per page and click volume
+--
+-- A note on country. GSC stores country as an ISO 3166-1 alpha-3 code ('usa', 'gbr')
+-- while GA4 geo.country stores a full English name ('United States'). They cannot be
+-- joined directly, so this query narrows on page + date + device only. If you want a
+-- country signal too, map GA4's names to alpha-3 in a CTE first, then add it back to
+-- the join keys.
 --
 -- Setup
 --   1. Find/replace the two placeholders below with your dataset names:
@@ -84,22 +90,22 @@ DECLARE start_date DATE DEFAULT DATE_SUB(end_date, INTERVAL days - 1 DAY);
 
 WITH
 
--- 1. GSC: clicks per query x page x date x device x country
+-- 1. GSC: clicks per query x page x date x device
 gsc AS (
   SELECT
     LOWER(query) AS query,
     LOWER(REGEXP_REPLACE(REGEXP_REPLACE(url, r'\?.*$', ''), r'/$', '')) AS page_norm,
     data_date,
     LOWER(device) AS device,
-    UPPER(country) AS country,
     SUM(clicks) AS clicks,
     SUM(impressions) AS impressions
   FROM `<<GSC_DATASET>>.searchdata_url_impression`
   WHERE data_date BETWEEN start_date AND end_date
     AND query IS NOT NULL
-    AND search_type = 'WEB'
+    AND query != ''
+    AND UPPER(search_type) = 'WEB'
     AND clicks > 0
-  GROUP BY query, page_norm, data_date, device, country
+  GROUP BY query, page_norm, data_date, device
 ),
 
 -- 2. GA4: extract per-event attributes for organic-search sessions
@@ -109,13 +115,14 @@ ga4_events AS (
     (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id,
     PARSE_DATE('%Y%m%d', event_date) AS data_date,
     LOWER(device.category) AS device,
-    UPPER(geo.country) AS country,
     LOWER(REGEXP_REPLACE(REGEXP_REPLACE(
       (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'page_location'),
       r'\?.*$', ''), r'/$', '')) AS page_url,
     event_name,
     event_timestamp,
-    -- session-medium (the medium that started the session)
+    -- Event-level medium, auto-populated by GA4 on page_view events. It is absent on
+    -- session_start / first_visit before 2023-11-02, so we coalesce across events below.
+    -- Newer exports also expose this without UNNEST via session_traffic_source_last_click.
     (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'medium') AS medium,
     -- revenue: prefer ecommerce.purchase_revenue, fall back to event_params.value
     COALESCE(
@@ -135,7 +142,6 @@ ga4_sessions AS (
     session_id,
     ANY_VALUE(data_date) AS data_date,
     ANY_VALUE(device) AS device,
-    ANY_VALUE(country) AS country,
     ARRAY_AGG(page_url IGNORE NULLS ORDER BY event_timestamp ASC LIMIT 1)[OFFSET(0)] AS landing_page,
     COALESCE(
       ANY_VALUE(IF(event_name = 'session_start', medium, NULL)),
@@ -148,7 +154,7 @@ ga4_sessions AS (
   GROUP BY user_pseudo_id, session_id
 ),
 
--- 4. GA4: aggregate organic-search sessions to page x date x device x country
+-- 4. GA4: aggregate organic-search sessions to page x date x device
 --    Adjust the LOWER(session_medium) filter if your GA4 setup uses different
 --    traffic-source values (e.g. "Organic Search" channel grouping).
 ga4 AS (
@@ -156,14 +162,13 @@ ga4 AS (
     landing_page AS page_norm,
     data_date,
     device,
-    country,
     COUNT(*) AS sessions,
     SUM(conversions) AS conversions,
     SUM(revenue) AS revenue
   FROM ga4_sessions
   WHERE landing_page IS NOT NULL
     AND LOWER(session_medium) = 'organic'
-  GROUP BY landing_page, data_date, device, country
+  GROUP BY landing_page, data_date, device
 ),
 
 -- 5. GSC: classify intent (3-tier brand matching)
@@ -223,14 +228,14 @@ gsc_weighted AS (
   FROM gsc_classified
 ),
 
--- 6. Bucket totals: weighted clicks and competitor count per (page, date, device, country)
+-- 6. Bucket totals: weighted clicks and competitor count per (page, date, device)
 bucket_totals AS (
   SELECT
-    page_norm, data_date, device, country,
+    page_norm, data_date, device,
     SUM(weighted_clicks) AS bucket_weighted_clicks,
     COUNT(DISTINCT query) AS bucket_query_count
   FROM gsc_weighted
-  GROUP BY page_norm, data_date, device, country
+  GROUP BY page_norm, data_date, device
 ),
 
 -- 7. Bucket-level attribution: distribute GA4 metrics by weighted click share
@@ -240,7 +245,6 @@ attributed_buckets AS (
     g.page_norm,
     g.data_date,
     g.device,
-    g.country,
     g.intent,
     g.clicks,
     SAFE_DIVIDE(g.weighted_clicks, b.bucket_weighted_clicks) * COALESCE(a.sessions, 0) AS att_sessions_raw,
@@ -248,8 +252,8 @@ attributed_buckets AS (
     SAFE_DIVIDE(g.weighted_clicks, b.bucket_weighted_clicks) * COALESCE(a.revenue, 0) AS att_revenue_raw,
     b.bucket_query_count
   FROM gsc_weighted g
-  JOIN bucket_totals b USING (page_norm, data_date, device, country)
-  LEFT JOIN ga4 a USING (page_norm, data_date, device, country)
+  JOIN bucket_totals b USING (page_norm, data_date, device)
+  LEFT JOIN ga4 a USING (page_norm, data_date, device)
 ),
 
 -- 8. Aggregate to (query, page) and filter by min_clicks

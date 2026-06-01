@@ -2,7 +2,7 @@
 name: multi-signal-attribution
 description: >
   Multi-signal keyword revenue attribution combining GSC bulk export and GA4 export
-  in BigQuery. Runs a 4-signal join (page + date + device + country), applies
+  in BigQuery. Runs a 3-signal join (page + date + device), applies
   intent weighting (branded, transactional, commercial, navigational, informational),
   renormalises per landing page so query-level attribution sums to the GA4 page
   total, and scores confidence per row. Use this skill whenever the user wants to:
@@ -22,7 +22,7 @@ You are running a keyword-level revenue attribution analysis using GSC bulk expo
 
 ## When to use
 
-Trigger this skill whenever the user wants to know which queries are driving traffic value (sessions, conversions, revenue) rather than just clicks. The methodology pushes attribution one level finer than the standard `ga4_gsc_query_revenue` MCP tool because it joins on four signals (page + date + device + country) before distributing GA4 metrics, applies intent weighting so branded and transactional queries get more credit than informational, and renormalises so totals match GA4 exactly.
+Trigger this skill whenever the user wants to know which queries are driving traffic value (sessions, conversions, revenue) rather than just clicks. The methodology pushes attribution one level finer than the standard `ga4_gsc_query_revenue` MCP tool because it joins on three signals (page + date + device) before distributing GA4 metrics, applies intent weighting so branded and transactional queries get more credit than informational, and renormalises so totals match GA4 exactly.
 
 If the user only wants click share or a one-line answer like "what keywords does my site rank for", use `ahrefs-quick-lookup` or the prebuilt `ga4_gsc_query_revenue` tool instead.
 
@@ -122,6 +122,6 @@ Patterns
 
 ## Files in this skill
 
-- `attribution.sql` — the parameterised query
-- `SKILL.md` — this file
-- `examples/synthetic_saas_demo.md` — a worked example output for reference
+- `attribution.sql`: the parameterised query
+- `SKILL.md`: this file
+- `examples/synthetic_saas_demo.md`: a worked example output for reference

@@ -1,6 +1,6 @@
 # Multi-Signal Keyword Attribution
 
-A free skill that solves the "(not provided)" problem in Google Analytics. Joins your GA4 conversion data with Search Console keyword data inside BigQuery using 4-signal narrowing, intent weighting, and confidence scoring per row.
+A free skill that solves the "(not provided)" problem in Google Analytics. Joins your GA4 conversion data with Search Console keyword data inside BigQuery using 3-signal narrowing, intent weighting, and confidence scoring per row.
 
 > **Full guide with setup walkthrough:** [suganthan.com/blog/not-provided-keywords-google-analytics/](https://suganthan.com/blog/not-provided-keywords-google-analytics/)
 
@@ -10,8 +10,8 @@ For each Google Search Console query that brought clicks to your site, this skil
 
 The methodology:
 
-1. **Joins GSC and GA4 on 4 signals**: normalised landing page, date, device, country.
-2. **Distributes GA4 metrics within each (page, date, device, country) bucket** by weighted click share.
+1. **Joins GSC and GA4 on 3 signals**: normalised landing page, date, device.
+2. **Distributes GA4 metrics within each (page, date, device) bucket** by weighted click share.
 3. **Weights by search intent**: branded (3.0x), transactional (2.0x), commercial (1.5x), navigational (1.0x), informational (0.5x).
 4. **Renormalises per page** so the sum of attributed metrics matches GA4's actual page total.
 5. **Scores confidence per row** based on candidate count and click volume.
@@ -37,7 +37,7 @@ The intent split usually tells the real story. In this dataset branded queries d
 | | Native GA4 + GSC link | Looker Studio blend | Keyword Hero | This skill |
 |---|---|---|---|---|
 | Cost | Free | Free | $9 to $99/mo | Free |
-| Methodology | Read-only report | Page-level uniform | Black box ML | 4-signal + intent + confidence |
+| Methodology | Read-only report | Page-level uniform | Black box ML | 3-signal + intent + confidence |
 | Confidence per row | None | None | None shown | HIGH/MEDIUM/LOW |
 | Source visibility | N/A | N/A | Closed | Open SQL |
 | Data ownership | N/A | Yours | Theirs | Yours |
@@ -110,7 +110,7 @@ Three things matter most for accuracy:
 - GSC has a ~3 day lag. The date window defaults to `today - 3 days` back.
 - GSC anonymises low-volume queries. Around 30 to 50% of organic clicks come back as `is_anonymized_query = true`. The skill cannot attribute revenue to those, so your real organic revenue is always higher than the attributed total.
 - GSC uses Pacific Time. GA4 uses your property timezone. Expect ~5% noise on day boundaries.
-- The 4-signal join rate is typically 70 to 90% by clicks. Sessions outside the join are not attributed.
+- The 3-signal join rate is typically 70 to 90% by clicks. Sessions outside the join are not attributed.
 - Confidence is a heuristic, not a statistical confidence interval. HIGH means signal alignment is strong and the candidate set is small.
 - Lead-gen sites without monetary conversion values can use `value_per_conversion` to impute revenue from a fixed lead value.
 
