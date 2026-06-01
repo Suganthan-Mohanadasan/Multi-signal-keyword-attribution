@@ -16,6 +16,22 @@ The methodology:
 4. **Renormalises per page** so the sum of attributed metrics matches GA4's actual page total.
 5. **Scores confidence per row** based on candidate count and click volume.
 
+## Example output
+
+You get a sortable table of every query, the page it landed on, its intent, and the GA4 sessions, conversions, and revenue attributed to it, each with a confidence rating. Here is a condensed sample (synthetic SaaS site, 28-day window, numbers illustrative):
+
+| Query | Page | Intent | Clicks | Att. Conv | Att. Revenue | Confidence |
+|---|---|---|---|---|---|---|
+| projectflow pricing | /pricing | branded | 168 | 28.4 | $6,820 | HIGH |
+| projectflow | / | branded | 412 | 41.6 | $9,985 | LOW |
+| best project management software | /comparison | commercial | 218 | 7.2 | $1,180 | MEDIUM |
+| buy project management software | /pricing | transactional | 45 | 5.1 | $640 | HIGH |
+| what is a kanban board | /blog/kanban-explained | informational | 412 | 0.9 | $48 | HIGH |
+
+The confidence column is the part no other tool gives you. `projectflow` pulls the most clicks but scores LOW because 19 queries compete for the home page, so the $9,985 beside it is the least trustworthy number in the table. `projectflow pricing` pulls fewer than half the clicks but scores HIGH because the pricing page has only 6 candidate queries. Sort by confidence, trust the HIGH rows, treat the LOW rows as directional.
+
+The intent split usually tells the real story. In this dataset branded queries drove 70% of revenue on 23% of clicks, while informational queries drove 1.3% of revenue on 42% of clicks. That is the ROI gap on top-of-funnel content, made visible. Full worked example in [examples/synthetic_saas_demo.md](examples/synthetic_saas_demo.md).
+
 ## Why this approach
 
 | | Native GA4 + GSC link | Looker Studio blend | Keyword Hero | This skill |
@@ -92,7 +108,7 @@ Three things matter most for accuracy:
 ## Caveats
 
 - GSC has a ~3 day lag. The date window defaults to `today - 3 days` back.
-- GSC anonymises low-volume queries. Around 30 to 50% of organic clicks come back as `is_anonymized_query = true`. The skill cannot attribute revenue to those.
+- GSC anonymises low-volume queries. Around 30 to 50% of organic clicks come back as `is_anonymized_query = true`. The skill cannot attribute revenue to those, so your real organic revenue is always higher than the attributed total.
 - GSC uses Pacific Time. GA4 uses your property timezone. Expect ~5% noise on day boundaries.
 - The 4-signal join rate is typically 70 to 90% by clicks. Sessions outside the join are not attributed.
 - Confidence is a heuristic, not a statistical confidence interval. HIGH means signal alignment is strong and the candidate set is small.

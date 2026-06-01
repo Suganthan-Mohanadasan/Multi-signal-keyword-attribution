@@ -124,4 +124,4 @@ Patterns
 
 - `attribution.sql` — the parameterised query
 - `SKILL.md` — this file
-- `examples/uk_models_28d.md` — a worked example output for reference
+- `examples/synthetic_saas_demo.md` — a worked example output for reference
